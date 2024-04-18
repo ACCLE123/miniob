@@ -17,8 +17,12 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/string.h"
 #include "common/log/log.h"
 #include <sstream>
+#include <iomanip>
 
-const char *ATTR_TYPE_NAME[] = {"undefined", "chars", "ints", "floats", "booleans"};
+const char *ATTR_TYPE_NAME[] = {"undefined", "chars", "dates", "ints", "floats", "booleans"};
+
+int month_days[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
 
 const char *attr_type_to_string(AttrType type)
 {
@@ -43,13 +47,48 @@ Value::Value(float val) { set_float(val); }
 
 Value::Value(bool val) { set_boolean(val); }
 
-Value::Value(const char *s, int len /*= 0*/) { set_string(s, len); }
+Value::Value(const char *s, int len, AttrType type) {
+  if (type == CHARS) {
+    set_string(s, len);
+  } else if (type == DATES) {
+    std::stringstream ss(s);
+
+    int year, month, day;
+    char dash;
+    
+    ss >> year >> dash >> month >> dash >> day;
+    // LOG_WARN("%d %d %d", year, month, day);
+
+    if (month < 1 || month > 12) {
+      std::exit(EXIT_FAILURE);
+      return;
+    }
+    int monthd = month_days[month];
+    if (year % 4 == 0 && month == 2) {
+      monthd = 29;
+    }
+    if (day < 1 || day > monthd) {
+      std::exit(EXIT_FAILURE);
+      return;
+    }
+
+    int value = year * 10000 + month * 100 + day;
+    set_date(value);
+  } else {
+    LOG_WARN("unsupported type: %d", type);
+  }
+}
+
 
 void Value::set_data(char *data, int length)
 {
   switch (attr_type_) {
     case CHARS: {
       set_string(data, length);
+    } break;
+    case DATES: {
+      num_value_.int_value_ = *(int *)data;
+      length_               = length;
     } break;
     case INTS: {
       num_value_.int_value_ = *(int *)data;
@@ -98,6 +137,16 @@ void Value::set_string(const char *s, int len /*= 0*/)
   }
   length_ = str_value_.length();
 }
+void Value::set_date(int val)
+{
+  LOG_INFO("set_date: %d", val);
+
+  attr_type_ = DATES;
+  num_value_.date_value_ = val;
+  length_               = sizeof(val);
+
+  // LOG_INFO("set_date: %d", val);
+}
 
 void Value::set_value(const Value &value)
 {
@@ -110,6 +159,9 @@ void Value::set_value(const Value &value)
     } break;
     case CHARS: {
       set_string(value.get_string().c_str());
+    } break;
+    case DATES: {
+      set_date(value.get_date());
     } break;
     case BOOLEANS: {
       set_boolean(value.get_boolean());
@@ -145,6 +197,10 @@ std::string Value::to_string() const
     case BOOLEANS: {
       os << num_value_.bool_value_;
     } break;
+    case DATES: {
+      // need to modify date format
+      os << common::date_to_str(num_value_.date_value_);
+    } break;
     case CHARS: {
       os << str_value_;
     } break;
@@ -170,6 +226,9 @@ int Value::compare(const Value &other) const
             this->str_value_.length(),
             (void *)other.str_value_.c_str(),
             other.str_value_.length());
+      } break;
+       case DATES: {
+        return common::compare_date((void *)&this->num_value_.date_value_, (void *)&other.num_value_.date_value_);
       } break;
       case BOOLEANS: {
         return common::compare_int((void *)&this->num_value_.bool_value_, (void *)&other.num_value_.bool_value_);
@@ -246,6 +305,8 @@ float Value::get_float() const
 }
 
 std::string Value::get_string() const { return this->to_string(); }
+
+int Value::get_date() const { return num_value_.int_value_; }
 
 bool Value::get_boolean() const
 {

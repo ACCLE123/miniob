@@ -76,6 +76,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         TRX_ROLLBACK
         INT_T
         STRING_T
+        DATE_T
         FLOAT_T
         HELP
         EXIT
@@ -116,11 +117,13 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   char *                            string;
   int                               number;
   float                             floats;
+  char *                            dates;
 }
 
 %token <number> NUMBER
 %token <floats> FLOAT
 %token <string> ID
+%token <dates> DATE_STR
 %token <string> SSS
 //非终结符
 
@@ -339,6 +342,7 @@ number:
     ;
 type:
     INT_T      { $$=INTS; }
+    | DATE_T { $$=DATES; }
     | STRING_T { $$=CHARS; }
     | FLOAT_T  { $$=FLOATS; }
     ;
@@ -382,9 +386,15 @@ value:
       $$ = new Value((float)$1);
       @$ = @1;
     }
+    |DATE_STR {
+      char *tmp = common::substr($1,1,strlen($1)-2);
+      $$ = new Value(tmp, strlen(tmp), AttrType::DATES);
+      free(tmp);
+      free($1);
+    }
     |SSS {
       char *tmp = common::substr($1,1,strlen($1)-2);
-      $$ = new Value(tmp);
+      $$ = new Value(tmp, strlen(tmp), AttrType::CHARS);
       free(tmp);
       free($1);
     }
